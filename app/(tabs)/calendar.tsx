@@ -10,6 +10,7 @@ import { useFocusEffect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { getWorkouts, StoredWorkout } from '@/lib/storage'
+import { exportCsv } from '@/lib/exportCsv'
 import { COLORS, FONTS, accentFor } from '@/lib/theme'
 
 /* ---------- Date Helpers ---------- */
@@ -162,6 +163,43 @@ export default function Calendar() {
             }
           />
         </View>
+
+        {/* CSV export */}
+        {workouts.length > 0 && (
+          <Pressable
+            onPress={() => exportCsv(workouts)}
+            style={({ pressed }) => ({
+              alignSelf: 'flex-start',
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: COLORS.cardAlt,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              paddingVertical: 10,
+              paddingHorizontal: 16,
+              borderRadius: 999,
+              marginTop: -12,
+              marginBottom: 28,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Ionicons
+              name="download-outline"
+              size={15}
+              color={COLORS.text}
+            />
+            <Text
+              style={{
+                color: COLORS.text,
+                fontFamily: FONTS.bodyBold,
+                fontSize: 13,
+                marginLeft: 6,
+              }}
+            >
+              Export CSV
+            </Text>
+          </Pressable>
+        )}
 
         {/* Month header + navigation */}
         <View

@@ -19,6 +19,7 @@ export const COLORS = {
   blue: '#4D9FFF',
   blueDeep: '#2F6BFF',
   slate: '#7E93B8',
+  coral: '#E8837A',
 }
 
 export const FONTS = {
@@ -35,8 +36,13 @@ export const SPLIT_ACCENTS: Record<string, string> = {
   'Full Body': COLORS.peach,
   'Upper / Lower': COLORS.teal,
   'Push / Pull / Legs': COLORS.green,
-  'Body Part Split': COLORS.pink,
+  'Bro Split': COLORS.pink,
   'Arnold Split': COLORS.gold,
+  'PHUL': COLORS.slate,
+  'PHAT': COLORS.coral,
+  '5×5 Strength': COLORS.blue,
+  // Legacy names kept so previously logged workouts stay colored.
+  'Body Part Split': COLORS.pink,
   'Lift-Based': COLORS.blue,
 }
 

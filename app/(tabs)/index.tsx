@@ -11,7 +11,15 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect } from 'expo-router'
 
-import { saveWorkout, getWorkouts, StoredWorkout } from '@/lib/storage'
+import {
+  saveWorkout,
+  getWorkouts,
+  savePreferredSplit,
+  getPreferredSplit,
+  clearPreferredSplit,
+  StoredWorkout,
+} from '@/lib/storage'
+import { lastPerformance, suggestNext } from '@/lib/recommend'
 import { COLORS, FONTS, accentFor } from '@/lib/theme'
 
 /* ---------- Exercise Library ---------- */
@@ -20,53 +28,90 @@ const EXERCISES = {
     'Bench Press',
     'Incline Bench',
     'Decline Bench',
+    'Dumbbell Press',
+    'Machine Chest Press',
     'Chest Fly',
     'Cable Fly',
+    'Pec Deck',
     'Push Ups',
     'Dips',
   ],
   back: [
     'Deadlift',
     'Pull Up',
+    'Chin Up',
     'Lat Pulldown',
     'Seated Row',
+    'Cable Row',
     'Barbell Row',
+    'Dumbbell Row',
     'T-Bar Row',
     'Face Pull',
+    'Shrugs',
+    'Back Extension',
   ],
   shoulders: [
     'Overhead Press',
     'Dumbbell Shoulder Press',
+    'Arnold Press',
+    'Machine Shoulder Press',
     'Lateral Raise',
+    'Cable Lateral Raise',
     'Front Raise',
     'Rear Delt Fly',
+    'Upright Row',
   ],
   arms: [
     'Bicep Curl',
     'Hammer Curl',
     'Preacher Curl',
+    'EZ Bar Curl',
+    'Cable Curl',
+    'Concentration Curl',
     'Tricep Extension',
+    'Overhead Tricep Extension',
     'Skull Crushers',
     'Cable Pushdown',
+    'Close-Grip Bench',
+    'Wrist Curl',
   ],
   legs: [
     'Squat',
     'Front Squat',
+    'Hack Squat',
+    'Goblet Squat',
+    'Bulgarian Split Squat',
     'Leg Press',
+    'Walking Lunge',
     'Leg Curl',
     'Leg Extension',
     'Romanian Deadlift',
+    'Sumo Deadlift',
     'Calf Raise',
+    'Seated Calf Raise',
+  ],
+  glutes: [
+    'Hip Thrust',
+    'Glute Bridge',
+    'Cable Kickback',
+    'Hip Abduction',
+    'Good Morning',
   ],
   core: [
     'Plank',
+    'Side Plank',
+    'Crunches',
+    'Sit Ups',
     'Hanging Leg Raise',
     'Cable Crunch',
     'Russian Twist',
+    'Ab Wheel Rollout',
+    'Dead Bug',
+    'Mountain Climbers',
   ],
 }
 
-/* ---------- Splits ---------- */
+/* ---------- Splits — the popular routines ---------- */
 const SPLITS = [
   {
     name: 'Full Body',
@@ -74,14 +119,14 @@ const SPLITS = [
   },
   {
     name: 'Upper / Lower',
-    muscles: ['chest', 'back', 'shoulders', 'arms', 'legs'],
+    muscles: ['chest', 'back', 'shoulders', 'arms', 'legs', 'glutes'],
   },
   {
     name: 'Push / Pull / Legs',
-    muscles: ['chest', 'shoulders', 'arms', 'back', 'legs'],
+    muscles: ['chest', 'shoulders', 'arms', 'back', 'legs', 'glutes'],
   },
   {
-    name: 'Body Part Split',
+    name: 'Bro Split',
     muscles: ['chest', 'back', 'shoulders', 'arms', 'legs'],
   },
   {
@@ -89,8 +134,16 @@ const SPLITS = [
     muscles: ['chest', 'back', 'shoulders', 'arms', 'legs', 'core'],
   },
   {
-    name: 'Lift-Based',
-    muscles: ['chest', 'back', 'legs'],
+    name: 'PHUL',
+    muscles: ['chest', 'back', 'shoulders', 'arms', 'legs', 'glutes'],
+  },
+  {
+    name: 'PHAT',
+    muscles: ['chest', 'back', 'shoulders', 'arms', 'legs', 'glutes'],
+  },
+  {
+    name: '5×5 Strength',
+    muscles: ['chest', 'back', 'shoulders', 'legs'],
   },
 ]
 
@@ -160,6 +213,26 @@ export default function Index() {
     }, [])
   )
 
+  // Restore the user's routine of choice once on launch, so the app
+  // opens with their split selected and the Start button ready.
+  useEffect(() => {
+    getPreferredSplit().then(name => {
+      if (!name) return
+      const split = SPLITS.find(s => s.name === name)
+      if (split) setSelectedSplit(current => current ?? split)
+    })
+  }, [])
+
+  const chooseSplit = (split: Split, alreadySelected: boolean) => {
+    if (alreadySelected) {
+      setSelectedSplit(null)
+      clearPreferredSplit()
+    } else {
+      setSelectedSplit(split)
+      savePreferredSplit(split.name)
+    }
+  }
+
   // Live session clock, like the reference's 00:00 header timer.
   useEffect(() => {
     if (!session) return
@@ -210,8 +283,11 @@ export default function Index() {
       getWorkouts().then(setHistory)
     }
     setSession(null)
-    setSelectedSplit(null)
     setSelectedExercise(null)
+    // Fall back to the remembered routine so the next session is
+    // one tap away.
+    const name = await getPreferredSplit()
+    setSelectedSplit(SPLITS.find(s => s.name === name) ?? null)
   }
 
   const addSet = () => {
@@ -236,6 +312,13 @@ export default function Index() {
   }
 
   const accent = accentFor(session?.split ?? selectedSplit?.name)
+
+  const recommendation = useMemo(() => {
+    if (!selectedExercise) return null
+    const last = lastPerformance(history, selectedExercise)
+    if (!last) return null
+    return { last, next: suggestNext(last) }
+  }, [history, selectedExercise])
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg }}>
@@ -460,9 +543,7 @@ export default function Index() {
                 return (
                   <Pressable
                     key={split.name}
-                    onPress={() =>
-                      setSelectedSplit(selected ? null : split)
-                    }
+                    onPress={() => chooseSplit(split, selected)}
                     style={{
                       width: '47.5%',
                       backgroundColor: COLORS.card,
@@ -589,6 +670,73 @@ export default function Index() {
                 )
               })}
             </ScrollView>
+
+            {/* Coach suggestion from last time this exercise was done */}
+            {recommendation && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: COLORS.card,
+                  borderRadius: 18,
+                  borderWidth: 1,
+                  borderColor: COLORS.border,
+                  padding: 14,
+                  marginBottom: 14,
+                }}
+              >
+                <Ionicons
+                  name="trending-up"
+                  size={18}
+                  color={accent}
+                  style={{ marginRight: 10 }}
+                />
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text
+                    style={{
+                      color: COLORS.text,
+                      fontFamily: FONTS.bodyBold,
+                      fontSize: 13,
+                    }}
+                  >
+                    Last time: {recommendation.last.weight} lbs ×{' '}
+                    {recommendation.last.reps}
+                  </Text>
+                  <Text
+                    style={{
+                      color: COLORS.muted,
+                      fontFamily: FONTS.bodySemi,
+                      fontSize: 11,
+                      marginTop: 2,
+                    }}
+                  >
+                    {recommendation.next.reason}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() =>
+                    setWeight(String(recommendation.next.weight))
+                  }
+                  style={({ pressed }) => ({
+                    backgroundColor: accent,
+                    paddingVertical: 8,
+                    paddingHorizontal: 14,
+                    borderRadius: 999,
+                    opacity: pressed ? 0.8 : 1,
+                  })}
+                >
+                  <Text
+                    style={{
+                      color: '#141414',
+                      fontFamily: FONTS.bodyBold,
+                      fontSize: 13,
+                    }}
+                  >
+                    {recommendation.next.weight} lbs
+                  </Text>
+                </Pressable>
+              </View>
+            )}
 
             {/* Inputs — asymmetric pair, weight leads */}
             <View style={{ flexDirection: 'row', marginBottom: 12 }}>
