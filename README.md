@@ -39,3 +39,11 @@ This project was developed as a **learning exercise** to:
 ### Install dependencies
 ```bash
 npm install
+```
+
+### Run the app
+```bash
+npx expo start
+```
+
+Then press `i` for the iOS simulator, `a` for Android, or `w` for the web preview.

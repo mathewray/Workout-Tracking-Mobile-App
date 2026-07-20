@@ -5,29 +5,12 @@ import {
   SafeAreaView,
   ScrollView,
 } from 'react-native'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useFocusEffect } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
 
-/* ---------- Design System ---------- */
-const COLORS = {
-  bg: '#07070A',
-  card: '#111114',
-  primary: '#22C55E',
-  accent: '#38BDF8',
-  text: '#F8FAFC',
-  muted: '#9CA3AF',
-  border: '#1F2937',
-}
-
-/* ---------- TEMP HISTORY (replace w/ AsyncStorage later) ---------- */
-const HISTORY = [
-  { date: '2025-01-02', split: 'Push' },
-  { date: '2025-01-04', split: 'Pull' },
-  { date: '2025-01-06', split: 'Legs' },
-  { date: '2025-01-09', split: 'Push' },
-]
-
-/* ---------- Split Rotation ---------- */
-const SPLIT_ROTATION = ['Push', 'Pull', 'Legs']
+import { getWorkouts, StoredWorkout } from '@/lib/storage'
+import { COLORS, FONTS, accentFor } from '@/lib/theme'
 
 /* ---------- Date Helpers ---------- */
 const today = new Date()
@@ -47,104 +30,186 @@ const getMonthMatrix = (year: number, month: number) => {
 }
 
 export default function Calendar() {
+  const [workouts, setWorkouts] = useState<StoredWorkout[]>([])
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [year, setYear] = useState(today.getFullYear())
+  const [month, setMonth] = useState(today.getMonth())
 
-  const year = today.getFullYear()
-  const month = today.getMonth()
+  useFocusEffect(
+    useCallback(() => {
+      getWorkouts().then(setWorkouts)
+    }, [])
+  )
 
   const monthMatrix = getMonthMatrix(year, month)
-  const monthName = today.toLocaleString('default', { month: 'long' })
+  const monthName = new Date(year, month, 1).toLocaleString('default', {
+    month: 'long',
+  })
 
-  /* ---------- Next Workout ---------- */
-  const nextWorkout = useMemo(() => {
-    if (HISTORY.length === 0) return 'Push'
-    const last = HISTORY[HISTORY.length - 1].split
-    const idx = SPLIT_ROTATION.indexOf(last)
-    return SPLIT_ROTATION[(idx + 1) % SPLIT_ROTATION.length]
-  }, [])
+  const prevMonth = () => {
+    if (month === 0) {
+      setMonth(11)
+      setYear(y => y - 1)
+    } else {
+      setMonth(m => m - 1)
+    }
+  }
 
-  const workoutsForSelectedDate = HISTORY.filter(
+  const nextMonth = () => {
+    if (month === 11) {
+      setMonth(0)
+      setYear(y => y + 1)
+    } else {
+      setMonth(m => m + 1)
+    }
+  }
+
+  const lastWorkout = useMemo(() => {
+    if (workouts.length === 0) return null
+    return [...workouts].sort((a, b) => a.date.localeCompare(b.date))[
+      workouts.length - 1
+    ]
+  }, [workouts])
+
+  const workoutsForSelectedDate = workouts.filter(
     w => w.date === selectedDate
   )
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 140 }}>
+      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 120 }}>
         {/* Header */}
-        <View style={{ marginBottom: 28 }}>
+        <View style={{ marginBottom: 24 }}>
           <Text
             style={{
               color: COLORS.text,
-              fontSize: 32,
-              fontWeight: '900',
+              fontFamily: FONTS.display,
+              fontSize: 30,
             }}
           >
             Calendar
           </Text>
-          <Text style={{ color: COLORS.muted }}>
+          <Text
+            style={{
+              color: COLORS.muted,
+              fontFamily: FONTS.bodySemi,
+              fontSize: 13,
+              marginTop: 4,
+            }}
+          >
             Track consistency over time
           </Text>
         </View>
 
-        {/* Next Workout Hero */}
+        {/* Last workout hero */}
         <View
           style={{
             backgroundColor: COLORS.card,
-            borderRadius: 28,
-            padding: 24,
+            borderRadius: 24,
+            padding: 22,
             marginBottom: 28,
             borderWidth: 1,
             borderColor: COLORS.border,
-            shadowColor: COLORS.primary,
-            shadowOpacity: 0.25,
-            shadowRadius: 30,
-            elevation: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
-          <Text
-            style={{
-              color: COLORS.muted,
-              fontSize: 12,
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-            }}
-          >
-            Next Workout
-          </Text>
-          <Text
-            style={{
-              color: COLORS.primary,
-              fontSize: 34,
-              fontWeight: '900',
-              marginTop: 6,
-            }}
-          >
-            {nextWorkout}
-          </Text>
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text
+              style={{
+                color: COLORS.faint,
+                fontFamily: FONTS.bodySemi,
+                fontSize: 10,
+                letterSpacing: 2,
+                textTransform: 'uppercase',
+              }}
+            >
+              {lastWorkout ? 'Last workout' : 'Get started'}
+            </Text>
+            <Text
+              style={{
+                color: lastWorkout
+                  ? accentFor(lastWorkout.split)
+                  : COLORS.text,
+                fontFamily: FONTS.display,
+                fontSize: 24,
+                marginTop: 6,
+              }}
+            >
+              {lastWorkout ? lastWorkout.split : 'No workouts yet'}
+            </Text>
+            <Text
+              style={{
+                color: COLORS.muted,
+                fontFamily: FONTS.bodySemi,
+                fontSize: 12,
+                marginTop: 4,
+              }}
+            >
+              {lastWorkout
+                ? `${lastWorkout.date} · ${workouts.length} workout${
+                    workouts.length === 1 ? '' : 's'
+                  } logged`
+                : 'Log your first session on the Workout tab.'}
+            </Text>
+          </View>
+          <Ionicons
+            name={lastWorkout ? 'flame' : 'barbell'}
+            size={26}
+            color={
+              lastWorkout ? accentFor(lastWorkout.split) : COLORS.faint
+            }
+          />
         </View>
 
-        {/* Month Header */}
-        <Text
+        {/* Month header + navigation */}
+        <View
           style={{
-            color: COLORS.text,
-            fontSize: 22,
-            fontWeight: '800',
-            marginBottom: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 14,
           }}
         >
-          {monthName} {year}
-        </Text>
+          <Pressable onPress={prevMonth} hitSlop={12}>
+            <Ionicons
+              name="chevron-back"
+              size={20}
+              color={COLORS.muted}
+            />
+          </Pressable>
 
-        {/* Weekday Labels */}
+          <Text
+            style={{
+              color: COLORS.text,
+              fontFamily: FONTS.display,
+              fontSize: 19,
+            }}
+          >
+            {monthName} {year}
+          </Text>
+
+          <Pressable onPress={nextMonth} hitSlop={12}>
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={COLORS.muted}
+            />
+          </Pressable>
+        </View>
+
+        {/* Weekday labels */}
         <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-          {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => (
+          {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, idx) => (
             <Text
-              key={d}
+              key={idx}
               style={{
                 flex: 1,
                 textAlign: 'center',
-                color: COLORS.muted,
-                fontSize: 12,
+                color: COLORS.faint,
+                fontFamily: FONTS.bodySemi,
+                fontSize: 11,
               }}
             >
               {d}
@@ -152,7 +217,7 @@ export default function Calendar() {
           ))}
         </View>
 
-        {/* Calendar Grid */}
+        {/* Calendar grid */}
         <View
           style={{
             flexDirection: 'row',
@@ -174,10 +239,9 @@ export default function Calendar() {
               '0'
             )}-${String(day).padStart(2, '0')}`
 
-            const hasWorkout = HISTORY.some(
+            const dayWorkouts = workouts.filter(
               w => w.date === dateStr
             )
-
             const selected = selectedDate === dateStr
 
             return (
@@ -189,78 +253,139 @@ export default function Calendar() {
                   height: 48,
                   justifyContent: 'center',
                   alignItems: 'center',
-                  borderRadius: 10,
+                  borderRadius: 12,
                   backgroundColor: selected
-                    ? COLORS.primary
+                    ? COLORS.cardAlt
                     : 'transparent',
+                  borderWidth: selected ? 1 : 0,
+                  borderColor: COLORS.border,
                 }}
               >
                 <Text
                   style={{
-                    color: selected ? '#000' : COLORS.text,
-                    fontWeight: '700',
+                    color: selected ? COLORS.text : COLORS.muted,
+                    fontFamily: FONTS.bodyBold,
+                    fontSize: 14,
                   }}
                 >
                   {day}
                 </Text>
 
-                {hasWorkout && !selected && (
-                  <View
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: 3,
-                      backgroundColor: COLORS.primary,
-                      marginTop: 4,
-                    }}
-                  />
-                )}
+                <View style={{ flexDirection: 'row', marginTop: 4 }}>
+                  {dayWorkouts.slice(0, 3).map((w, i) => (
+                    <View
+                      key={i}
+                      style={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: 3,
+                        marginHorizontal: 1,
+                        backgroundColor: accentFor(w.split),
+                      }}
+                    />
+                  ))}
+                </View>
               </Pressable>
             )
           })}
         </View>
 
-        {/* Selected Day Workouts */}
+        {/* Selected day workouts */}
         {selectedDate && (
           <>
             <Text
               style={{
                 color: COLORS.text,
-                fontSize: 18,
-                fontWeight: '800',
+                fontFamily: FONTS.display,
+                fontSize: 17,
                 marginBottom: 12,
               }}
             >
-              Workouts on {selectedDate}
+              {selectedDate}
             </Text>
 
             {workoutsForSelectedDate.length === 0 ? (
-              <Text style={{ color: COLORS.muted }}>
+              <Text
+                style={{
+                  color: COLORS.faint,
+                  fontFamily: FONTS.bodySemi,
+                  fontSize: 13,
+                }}
+              >
                 No workouts logged.
               </Text>
             ) : (
-              workoutsForSelectedDate.map((w, idx) => (
-                <View
-                  key={idx}
-                  style={{
-                    backgroundColor: COLORS.card,
-                    padding: 16,
-                    borderRadius: 16,
-                    marginBottom: 10,
-                    borderWidth: 1,
-                    borderColor: COLORS.border,
-                  }}
-                >
-                  <Text
+              workoutsForSelectedDate.map((w, idx) => {
+                const a = accentFor(w.split)
+                return (
+                  <View
+                    key={idx}
                     style={{
-                      color: COLORS.accent,
-                      fontWeight: '800',
+                      backgroundColor: COLORS.card,
+                      padding: 18,
+                      borderRadius: 20,
+                      marginBottom: 10,
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
                     }}
                   >
-                    {w.split}
-                  </Text>
-                </View>
-              ))
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        marginBottom: 10,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: a,
+                          marginRight: 8,
+                        }}
+                      />
+                      <Text
+                        style={{
+                          color: a,
+                          fontFamily: FONTS.display,
+                          fontSize: 16,
+                        }}
+                      >
+                        {w.split}
+                      </Text>
+                    </View>
+
+                    {w.exercises.map(ex => (
+                      <View key={ex.name} style={{ marginBottom: 8 }}>
+                        <Text
+                          style={{
+                            color: COLORS.text,
+                            fontFamily: FONTS.bodyBold,
+                            fontSize: 13,
+                          }}
+                        >
+                          {ex.name}
+                        </Text>
+                        {ex.sets.map((set, sIdx) => (
+                          <Text
+                            key={sIdx}
+                            style={{
+                              color: COLORS.muted,
+                              fontFamily: FONTS.bodySemi,
+                              fontSize: 12,
+                              marginTop: 2,
+                            }}
+                          >
+                            Set {sIdx + 1} · {set.weight} lbs ×{' '}
+                            {set.reps}
+                          </Text>
+                        ))}
+                      </View>
+                    ))}
+                  </View>
+                )
+              })
             )}
           </>
         )}
